@@ -179,14 +179,14 @@ export const ExperimentViewHeader = React.memo(
         titleAddOns={
           <>
             {getInfoTooltip()}
-            {feedbackFormUrl && renderFeedbackForm()}
+            {/* {feedbackFormUrl && renderFeedbackForm()} */}
             {showAddDescriptionButton && getAddDescriptionButton()}
           </>
         }
         breadcrumbs={breadcrumbs}
         spacerSize="sm"
       >
-        {getShareButton()}
+        {/* {getShareButton()} */}
       </PageHeader>
     );
   },

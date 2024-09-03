@@ -233,6 +233,14 @@ export const fetchEndpoint = ({
   error = defaultError,
   errorCondition = defaultFetchErrorConditionFn,
 }: any) => {
+  const authToken = localStorage.getItem("auth-token");
+  const userName = localStorage.getItem("username");
+  const repoName = localStorage.getItem("repo_name");
+  const projectId = localStorage.getItem("displayProjectId");
+  const username = `${repoName}|${projectId}|${userName}`; // Replace with your actual username
+  const password = authToken;
+  const authString = window.btoa(`${username}:${password}`);
+  const modifiedHeaderOptions = { ...headerOptions, "Authorization": `Basic ${authString}` }
   return new Promise((resolve, reject) =>
     retry(
       () =>
@@ -240,7 +248,7 @@ export const fetchEndpoint = ({
           relativeUrl,
           method,
           body,
-          headerOptions,
+          headerOptions: modifiedHeaderOptions,
           options,
           timeoutMs,
         }),

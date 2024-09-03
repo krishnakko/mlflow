@@ -127,6 +127,12 @@ export class ModelVersionViewImpl extends React.Component<ModelVersionViewImplPr
     this.setState({ showDescriptionEditor: true });
   };
 
+  startProductionize = (e: any, modelVersion: any) => {
+    // eslint-disable-next-line no-console
+    // console.log("this.state", this.state);
+    this.setState({ modelVersion: this.props?.modelVersion });
+  };
+
   handleAddTag = (values: any) => {
     const form = this.formRef.current;
     const { modelName } = this.props;
@@ -297,6 +303,31 @@ export class ModelVersionViewImpl extends React.Component<ModelVersionViewImplPr
     );
   }
 
+  renderPublishedModelUrl(modelVersion: any) {
+    return (
+      <Descriptions.Item
+        key='description-key-modified'
+        label={this.props.intl.formatMessage({
+          defaultMessage: 'Published url',
+          description: 'Label name for published url',
+        })}
+      >
+        {/* {Utils.formatTimestamp(last_updated_timestamp)} */}
+      </Descriptions.Item>
+    );
+  }
+
+  renderPublishVersionToProduction(modelVersion: any) {
+    return (
+      <button
+        className='productionizeButton'
+        onClick={(e) => { this.startProductionize(e, modelVersion) }}
+      >
+        Productionize
+      </button>
+    );
+  }
+
   renderSourceRunDescription() {
     return (
       <Descriptions.Item
@@ -393,7 +424,15 @@ export class ModelVersionViewImpl extends React.Component<ModelVersionViewImplPr
   renderMetadata(modelVersion: any) {
     return (
       // @ts-expect-error TS(2322): Type '{ children: any[]; className: string; }' is ... Remove this comment to see the full error message
-      <Descriptions className="metadata-list">{this.getDescriptions(modelVersion)}</Descriptions>
+      <Descriptions className='metadata-list'>{this.getDescriptions(modelVersion)}</Descriptions>
+    );
+  }
+
+  renderExtraProductionizeData(modelVersion: any) {
+    return (
+      <React.Fragment>
+        {this.renderPublishVersionToProduction(modelVersion)}
+      </React.Fragment>
     );
   }
 

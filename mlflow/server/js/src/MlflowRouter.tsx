@@ -41,7 +41,7 @@ export const MlflowRouter = ({
       <ErrorModal />
       <HashRouter>
         <AppErrorBoundary>
-          <MlflowHeader isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />
+          {/* {process.env['HIDE_HEADER'] ? null : <MlflowHeader isDarkTheme={isDarkTheme} setIsDarkTheme={setIsDarkTheme} />} */}
           <React.Suspense fallback={<LegacySkeleton />}>
             <Routes>
               {routes.map(({ element, pageId, path }) => (

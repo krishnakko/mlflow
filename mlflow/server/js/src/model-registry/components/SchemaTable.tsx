@@ -137,35 +137,35 @@ export class SchemaTableImpl extends React.PureComponent<Props> {
     const hasSchema = schema.inputs.length || schema.outputs.length;
     const sectionHeaders = hasSchema
       ? [
-          {
-            key: '1',
-            name: this.props.intl.formatMessage(
-              {
-                defaultMessage: 'Inputs ({numInputs})',
-                description: 'Input section header for schema table in model version page',
-              },
-              {
-                numInputs: schema.inputs.length,
-              },
-            ),
-            type: '',
-            table: this.renderSchemaTable(schema.inputs, 'inputs'),
-          },
-          {
-            key: '2',
-            name: this.props.intl.formatMessage(
-              {
-                defaultMessage: 'Outputs ({numOutputs})',
-                description: 'Input section header for schema table in model version page',
-              },
-              {
-                numOutputs: schema.outputs.length,
-              },
-            ),
-            type: '',
-            table: this.renderSchemaTable(schema.outputs, 'outputs'),
-          },
-        ]
+        {
+          key: '1',
+          name: this.props.intl.formatMessage(
+            {
+              defaultMessage: 'Inputs ({numInputs})',
+              description: 'Input section header for schema table in model version page',
+            },
+            {
+              numInputs: schema.inputs.length,
+            },
+          ),
+          type: '',
+          table: this.renderSchemaTable(schema.inputs, 'inputs'),
+        },
+        {
+          key: '2',
+          name: this.props.intl.formatMessage(
+            {
+              defaultMessage: 'Outputs ({numOutputs})',
+              description: 'Input section header for schema table in model version page',
+            },
+            {
+              numOutputs: schema.outputs.length,
+            },
+          ),
+          type: '',
+          table: this.renderSchemaTable(schema.outputs, 'outputs'),
+        },
+      ]
       : [];
 
     const { theme } = this.props.designSystemThemeApi;
@@ -198,8 +198,7 @@ export class SchemaTableImpl extends React.PureComponent<Props> {
               <div>
                 {/* eslint-disable-next-line max-len */}
                 <FormattedMessage
-                  defaultMessage="No schema. See <link>MLflow docs</link> for how to include
-                     input and output schema with your model."
+                  defaultMessage='No schema.'
                   description="Text for schema table when no schema exists in the model version
                      page"
                   values={{

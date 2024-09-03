@@ -12,7 +12,7 @@ import {
 } from '@databricks/design-system';
 import { Interpolation, Theme } from '@emotion/react';
 import { ColumnDef, flexRender, getCoreRowModel, SortingState, useReactTable } from '@tanstack/react-table';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { Link } from '../../../common/utils/RoutingUtils';
 import { ModelListTagsCell, ModelListVersionLinkCell } from './ModelTableCellRenderers';
@@ -39,6 +39,7 @@ enum ColumnKeys {
   STAGE_PRODUCTION = 'stage_production',
   TAGS = 'tags',
   ALIASED_VERSIONS = 'aliased_versions',
+  PUBLISHED_VERSION = 'published_version',
 }
 
 export interface ModelListTableProps {
@@ -50,6 +51,7 @@ export interface ModelListTableProps {
   error?: Error;
   isFiltered: boolean;
   onSortChange: (params: { orderByKey: string; orderByAsc: boolean }) => void;
+  publishedModels: any[];
 }
 
 type ModelsColumnDef = ColumnDef<ModelEntity> & {
@@ -66,10 +68,14 @@ export const ModelListTable = ({
   error,
   isFiltered,
   pagination,
+  publishedModels,
 }: ModelListTableProps) => {
   const intl = useIntl();
+  // eslint-disable-next-line no-console
+  console.log("publishedModels==", publishedModels)
 
   const { usingNextModelsUI } = useNextModelsUIContext();
+  const [modelsList, setModelsList] = useState<any>([]);
 
   const tableColumns = useMemo(() => {
     const columns: ModelsColumnDef[] = [
@@ -106,6 +112,28 @@ export const ModelListTable = ({
             '';
           return <ModelListVersionLinkCell name={name} versionNumber={latestVersionNumber} />;
         },
+        meta: { styles: { maxWidth: 120 } },
+      },
+      {
+        id: ColumnKeys.PUBLISHED_VERSION,
+        enableSorting: false,
+
+        header: intl.formatMessage({
+          defaultMessage: 'Published version',
+          description: 'Column title for published model version in the registered model page',
+        }),
+        accessorKey: 'published_version',
+        // cell: ({ getValue, row: { original } }) => {
+        //   const published = original?.published_version;
+
+        //   const { name } = original;
+        //   const latestVersions = getValue() as ModelVersionInfoEntity[];
+        //   const latestVersionNumber =
+        //     (Boolean(latestVersions?.length) &&
+        //       Math.max(...latestVersions.map((v) => parseInt(v.version, 10))).toString()) ||
+        //     '';
+        //   return <ModelListVersionLinkCell name={name} versionNumber={latestVersionNumber} />;
+        // },
         meta: { styles: { maxWidth: 120 } },
       },
     ];
@@ -204,6 +232,20 @@ export const ModelListTable = ({
     usingNextModelsUI,
   ]);
 
+  useEffect(() => {
+    if (modelsData) {
+      const models_ = modelsData.map((rec: any) => {
+        const condition = (record: any) => record.model_name === rec.name;
+        const matchedRecord = publishedModels.find(condition);
+        return {
+          ...rec,
+          published_version: matchedRecord ? `Version ${matchedRecord.model_version}` : '-',
+        }
+      });
+      setModelsList(models_)
+    }
+  }, [publishedModels, modelsData])
+
   const sorting: SortingState = [{ id: orderByKey, desc: !orderByAsc }];
 
   const setSorting = (stateUpdater: SortingState | ((state: SortingState) => SortingState)) => {
@@ -269,7 +311,7 @@ export const ModelListTable = ({
   const isEmpty = () => (!isLoading && table.getRowModel().rows.length === 0) || error;
 
   const table = useReactTable<ModelEntity>({
-    data: modelsData,
+    data: modelsList,
     columns: tableColumns,
     state: {
       sorting,

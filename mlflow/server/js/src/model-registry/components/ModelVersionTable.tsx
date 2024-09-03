@@ -1,6 +1,9 @@
+/* eslint-disable no-console */
 import {
+  Button,
   Empty,
   NotificationIcon,
+  Modal,
   Pagination,
   PlusIcon,
   Table,
@@ -47,9 +50,15 @@ import { ModelVersionTableAliasesCell } from './aliases/ModelVersionTableAliases
 import { Interpolation, Theme } from '@emotion/react';
 import { truncateToFirstLineWithMaxLength } from '../../common/utils/StringUtils';
 import ExpandableList from '../../common/components/ExpandableList';
+import { ReactComponent as CancelIcon } from "../../shared/ico-cancel-circle.svg";
+import { ReactComponent as CheckIcon } from "../../shared/ico-check-circle.svg";
+import { getLocalStorageItem, jenkinsJobEndStatuses } from '../../utils';
+import { publishModelJenkinsStatus, publishModelVersionApi, removeModelVersionApi } from '../../common/actions';
+import { Loader, TransparentLoader } from '../../common/Loader';
 
 type ModelVersionTableProps = {
   modelName: string;
+  publishedVersions: any;
   modelVersions?: ModelVersionInfoEntity[];
   activeStageOnly?: boolean;
   onChange: (selectedRowKeys: string[], selectedRows: ModelVersionInfoEntity[]) => void;
@@ -57,6 +66,8 @@ type ModelVersionTableProps = {
   onMetadataUpdated: () => void;
   usingNextModelsUI: boolean;
   aliases?: ModelAliasMap;
+  getPublishedVersions: (modelName: any) => void;
+  publishedRetrieved: boolean;
 };
 
 type ModelVersionColumnDef = ColumnDef<ModelVersionInfoEntity> & {
@@ -72,6 +83,8 @@ enum COLUMN_IDS {
   STAGE = 'STAGE',
   DESCRIPTION = 'DESCRIPTION',
   ALIASES = 'ALIASES',
+  PUBLISHED = 'PUBLISHED',
+  ACTIONS = 'ACTIONS',
 }
 
 export const ModelVersionTable = ({
@@ -83,6 +96,9 @@ export const ModelVersionTable = ({
   onMetadataUpdated,
   usingNextModelsUI,
   aliases,
+  publishedVersions,
+  getPublishedVersions,
+  publishedRetrieved,
 }: ModelVersionTableProps) => {
   const aliasesByVersion = useMemo(() => {
     const result: Record<string, string[]> = {};
@@ -104,6 +120,22 @@ export const ModelVersionTable = ({
 
   const { theme } = useDesignSystemTheme();
   const intl = useIntl();
+  const loopTime = 5000;
+  // If you wish to proceed with publishing of this model please click Continue or click Cancel to abort.
+  const confirmationPublishMessage = "If you wish to proceed with publishing of this model please click Continue or click Cancel to abort."
+  const confirmationUnpublishMessage = "If you wish to proceed with unpublishing of this model please click Continue or click Cancel to abort. This will unpublish this model version."
+  const unPublishContinueMessage = "The process of unpublishing for this model version is currently in progress. Once finished, the URL for public access will be deactivated. We appreciate your patience."
+  const [confirmPublish, setConfirmPublish] = useState<boolean>(false);
+  const [prodMessage, setProdMessage] = useState<string>(confirmationPublishMessage);
+  const [versionSelected, setVersionSelected] = useState<any>(null);
+  const [action, setAction] = useState<string>("Publish");
+  const [loader, setLoader] = useState<boolean>(false);
+  const [publishResponse, setPublishResponse] = useState<any>(null);
+  const [jenkinsJobStatus, setJenkinsJobStatus] = useState<any>(null);
+  const [publishedVersion, setPublishedVersion] = useState<any>([]);
+  const [publishedRunId, setPublishedRunId] = useState<any>([]);
+  const [versionsList, setVersionsList] = useState<any>([]);
+  const [continueClicked, setContinueClicked] = useState<boolean>(false);
 
   const allTagsKeys = useMemo(() => {
     const allTagsList: KeyValueEntity[] = versions?.map((modelVersion) => modelVersion?.tags || []).flat() || [];
@@ -134,10 +166,118 @@ export const ModelVersionTable = ({
   });
 
   useEffect(() => {
+    if (publishedVersions) {
+      const runIds = publishedVersions?.map((rec: any) => rec.run_id);
+      setPublishedRunId(runIds)
+    }
+  }, [publishedVersions])
+
+  useEffect(() => {
+    if (versions) {
+      const versions_ = versions.map((rec: any) => {
+        return {
+          ...rec,
+          published: publishedRunId.includes(rec.run_id)
+        }
+      });
+      setVersionsList(versions_)
+    }
+  }, [publishedRunId, versions])
+
+  useEffect(() => {
+    if (jenkinsJobStatus && publishResponse?.build_id?.location) {
+      // eslint-disable-next-line no-console
+      console.log("Jenkins Job Status", publishResponse?.build_id?.location, jenkinsJobStatus)
+      startJenkinsJobStatusCall(publishResponse?.build_id?.location);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jenkinsJobStatus])
+
+  const startJenkinsJobStatusCall = async (location: string) => {
+    const actionName = action === "Unpublish" ? "mlflow-remove-version" : "mlflow-publish";
+    const response: any = await publishModelJenkinsStatus(actionName, location);
+    console.log("response in UseEffect", response, !jenkinsJobEndStatuses.includes(response?.build_status));
+    if ((response?.build_number_ || response?.build_status) && !jenkinsJobEndStatuses.includes(response?.build_status)) {
+      setTimeout(() => {
+        setJenkinsJobStatus(response);
+      }, loopTime)
+    } else if (response?.build_status === "SUCCESS") {
+      getPublishedVersions(modelName);
+    }
+  }
+
+  useEffect(() => {
     const selectedVersions = (versions || []).filter(({ version }) => rowSelection[version]);
     const selectedVersionNumbers = selectedVersions.map(({ version }) => version);
     onChange(selectedVersionNumbers, selectedVersions);
   }, [rowSelection, onChange, versions]);
+
+
+  const onPublishClick = (version: any) => {
+    setAction("Publish")
+    setVersionSelected(version);
+    setConfirmPublish(true);
+  }
+
+  const onUnpublishClick = (version: any) => {
+    console.log("versionSelected==", version)
+    setAction("Unpublish")
+    setVersionSelected(version);
+    setConfirmPublish(true);
+    setProdMessage(confirmationUnpublishMessage)
+  }
+
+  const onClickCancel = () => {
+    setConfirmPublish(false);
+    setContinueClicked(false);
+    setProdMessage(confirmationPublishMessage);
+  }
+
+  const startPublish = async () => {
+    if (continueClicked) {
+      onClickCancel()
+    } else {
+      setContinueClicked(true);
+      setLoader(true)
+      try {
+        if (action === "Publish") {
+          const payload = {
+            "projectId": getLocalStorageItem("displayProjectId"),
+            "runID": versionSelected?.run_id,
+            "Model_name": versionSelected?.name,
+            "version": versionSelected?.version
+          }
+          const response = await publishModelVersionApi(payload);
+          // eslint-disable-next-line no-console
+          console.log("responseresponse== in startPublish", response);
+          if (response?.build_id?.location) {
+            setPublishResponse(response);
+            setTimeout(() => {
+              setJenkinsJobStatus({ build_status: "IN PROGRESS" });
+            }, loopTime)
+            setProdMessage("The hosting process for this model version is presently underway. Upon completion, a URL for public access will be furnished on the same page. We sincerely appreciate your patience and look forward to delivering a seamless and efficient service experience to you. If a previous version of the model was hosted, the new model will be available at the same URL.")
+          }
+        } else if (action === "Unpublish") {
+          const params = {
+            "name": versionSelected?.name,
+          }
+          const response = await removeModelVersionApi(versionSelected?.run_id, params);
+          if (response?.build_id?.location) {
+            setPublishResponse(response);
+            setTimeout(() => {
+              setJenkinsJobStatus({ build_status: "IN PROGRESS" });
+            }, loopTime)
+            setProdMessage(unPublishContinueMessage);
+          }
+        }
+        setLoader(false);
+      } catch (e) {
+        setLoader(false)
+      }
+    }
+  };
+
+
 
   const tableColumns = useMemo(() => {
     const columns: ModelVersionColumnDef[] = [
@@ -277,10 +417,65 @@ export const ModelVersionTable = ({
       accessorKey: 'description',
       cell: ({ getValue }) => truncateToFirstLineWithMaxLength(getValue(), 32),
     });
+    columns.push({
+      id: COLUMN_IDS.PUBLISHED,
+      enableSorting: false,
+      header: intl.formatMessage({
+        defaultMessage: 'Published',
+        description: 'Published is for checking whether the the model version is published or not.',
+      }),
+      meta: { styles: { flex: 2 } },
+      accessorKey: 'published',
+      cell: ({ row: { original } }) => {
+        const published = original?.published;
+        return (
+          <span>
+            {publishedRetrieved ? (published ? <CheckIcon style={{ width: "14px", height: "14px", position: "relative", top: "2px", marginRight: "5px" }} /> : <CancelIcon style={{ width: "14px", height: "14px", position: "relative", top: "2px", marginRight: "5px" }} />) : "--"}
+          </span>
+        );
+      },
+    });
+    columns.push({
+      id: COLUMN_IDS.ACTIONS,
+      enableSorting: false,
+      header: intl.formatMessage({
+        defaultMessage: 'Actions',
+        description: 'Actions is for doing some necessary actions.',
+      }),
+      meta: { styles: { flex: 2 } },
+      accessorKey: 'actions',
+      cell: ({ row: { original } }) => {
+        const published = original?.published;
+        return (
+          <span>
+            <Button
+              componentId='publishedOrNot'
+              type='link'
+              className={`${published ? "publishedIcon" : "publishIcon"}`}
+              onClick={() => {
+                if (publishedRetrieved) {
+                  if (published) {
+                    onUnpublishClick(original)
+                  } else {
+                    onPublishClick(original)
+                  }
+                }
+              }}
+              data-test-id='publish-version-button'
+            >
+              {publishedRetrieved ? (published ? "Unpublish" : "Publish") : "--"}
+            </Button>
+          </span>
+        );
+      },
+    });
+    // actions ->UnPublish and Publish
     return columns;
-  }, [theme, intl, modelName, showEditTagsModal, showEditAliasesModal, usingNextModelsUI, aliasesByVersion]);
+  }, [theme, intl, modelName, showEditTagsModal, showEditAliasesModal, usingNextModelsUI, aliasesByVersion, publishedRetrieved]);
 
-  const [sorting, setSorting] = useState<SortingState>([{ id: COLUMN_IDS.CREATION_TIMESTAMP, desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: COLUMN_IDS.CREATION_TIMESTAMP, desc: true },
+  ]);
 
   const table = useReactTable<ModelVersionInfoEntity>({
     data: versions || [],
@@ -340,6 +535,33 @@ export const ModelVersionTable = ({
 
   return (
     <>
+      <div>
+        {
+          loader && <div className="transparentLoader">
+            {/* <TransparentLoader /> */}
+            <Loader />
+          </div>
+        }
+
+        <Modal
+          visible={confirmPublish}
+          title={
+            action === "Publish" ? 'Publish' : 'Unpublish'
+          }
+          // okText='Continue'
+          // cancelText='Cancel'
+          okText={continueClicked ? 'OK' : 'Continue'}
+          cancelText={continueClicked ? undefined : "Cancel"}
+          onCancel={onClickCancel}
+          onOk={() => {
+            startPublish();
+          }}
+        >
+          <div>
+            {prodMessage}
+          </div>
+        </Modal>
+      </div>
       <Table
         data-testid="model-list-table"
         pagination={paginationComponent}

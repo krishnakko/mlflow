@@ -26,6 +26,8 @@ import { ModelVersionInfoEntity, type ModelEntity } from '../../experiment-track
 import { shouldShowModelsNextUI } from '../../common/utils/FeatureUtils';
 import { ModelsNextUIToggleSwitch } from './ModelsNextUIToggleSwitch';
 import { withNextModelsUIContext } from '../hooks/useNextModelsUI';
+import { getPublishModels } from '../../common/actions';
+import { getLocalStorageItem } from '../../utils';
 
 export const StageFilters = {
   ALL: 'ALL',
@@ -67,14 +69,31 @@ export class ModelViewImpl extends React.Component<ModelViewImplProps, ModelView
     runsSelected: {},
     isTagsRequestPending: false,
     updatingEmailPreferences: false,
+    publishedVersions: [],
+    publishedRetrieved: false,
   };
 
   formRef = React.createRef();
+
+  getPublishedVersions = (modelName: any) => {
+    getPublishModels(modelName).then((resp) => {
+      this.setState({ publishedRetrieved: true });
+      if (resp.status === 200) {
+        this.setState({ publishedVersions: resp.data });
+      }
+    });
+  }
 
   componentDidMount() {
     // @ts-expect-error TS(2532): Object is possibly 'undefined'.
     const pageTitle = `${this.props.model.name} - MLflow Model`;
     Utils.updatePageTitle(pageTitle);
+    if (this.props?.model?.name) {
+      const modelName = this.props?.model?.name;
+      if (modelName) {
+        this.getPublishedVersions(modelName);
+      }
+    }
   }
 
   handleStageFilterChange = (e: any) => {
@@ -210,6 +229,17 @@ export class ModelViewImpl extends React.Component<ModelViewImplProps, ModelView
     );
   }
 
+  publishedUrlOnClick = (modelPublishedVersions: any[], modelName: string) => {
+    // eslint-disable-next-line no-console
+    console.log("modelName== publishedUrlOnClick", modelName);
+    if (modelPublishedVersions) {
+      const url = modelPublishedVersions[0].model_url;
+      if (url) {
+        window.open(url, '_blank');
+      }
+    }
+  }
+
   renderDescriptionEditIcon() {
     return (
       <Button
@@ -232,6 +262,7 @@ export class ModelViewImpl extends React.Component<ModelViewImplProps, ModelView
     const { model, modelVersions, tags } = this.props;
     const {
       stageFilter,
+      publishedVersions,
       showDescriptionEditor,
       isDeleteModalVisible,
       isDeleteModalConfirmLoading,
@@ -239,7 +270,11 @@ export class ModelViewImpl extends React.Component<ModelViewImplProps, ModelView
     } = this.state;
     // @ts-expect-error TS(2532): Object is possibly 'undefined'.
     const modelName = model.name;
+    const projectId = getLocalStorageItem("displayProjectId")?.toLowerCase()
     const compareDisabled = Object.keys(this.state.runsSelected).length < 2;
+    const baseUrl = process.env["REACT_APP_MLFLOW_STATIC_PROXY_TARGET"];
+    const pubUrl = `${baseUrl}${projectId}/${modelName}/`
+    // eslint-disable-next-line no-console
     return (
       <div css={styles.wrapper}>
         {/* Metadata List */}
@@ -264,6 +299,24 @@ export class ModelViewImpl extends React.Component<ModelViewImplProps, ModelView
             {/* @ts-expect-error TS(2532): Object is possibly 'undefined'. */}
             {Utils.formatTimestamp(model.last_updated_timestamp)}
           </Descriptions.Item>
+          {
+            publishedVersions?.length > 0 && <Descriptions.Item
+              key='description-key-modified'
+              label={this.props.intl.formatMessage({
+                defaultMessage: 'Published url',
+                description: 'Label name for published url',
+              })}
+            >
+              <Button
+                componentId="codegen_mlflow_app_src_model-registry_components_modelview.tsx_467"
+                data-test-id='model-published-url'
+                onClick={() => { this.publishedUrlOnClick(publishedVersions, modelName) }}
+                type='link'
+              >
+                {modelName}
+              </Button>
+            </Descriptions.Item>
+          }
           {/* Reported during ESLint upgrade */}
           {/* eslint-disable-next-line react/prop-types */}
           {(model as any).user_id && (
@@ -396,7 +449,10 @@ export class ModelViewImpl extends React.Component<ModelViewImplProps, ModelView
             modelName={modelName}
             modelVersions={modelVersions}
             modelEntity={model}
+            publishedVersions={this.state?.publishedVersions}
+            getPublishedVersions={this.getPublishedVersions}
             onChange={this.onChange}
+            publishedRetrieved={this.state?.publishedRetrieved}
             onMetadataUpdated={this.props.onMetadataUpdated}
             usingNextModelsUI={this.props.usingNextModelsUI}
             aliases={model?.aliases}

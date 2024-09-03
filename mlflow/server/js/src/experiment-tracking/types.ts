@@ -38,6 +38,7 @@ export interface ModelEntity {
   email_subscription_status: string;
   latest_versions: ModelVersionInfoEntity[];
   aliases?: ModelAliasMap;
+  published_version?: any;
 }
 
 /**
@@ -54,8 +55,11 @@ export interface ModelVersionInfoEntity {
   run_id: string;
   status: string;
   status_message?: string;
+  permission_level: string;
+  email_subscription_status: string;
   aliases?: ModelVersionAliasList;
   tags?: KeyValueEntity[];
+  published?: boolean;
 }
 
 /**

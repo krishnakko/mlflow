@@ -26,6 +26,7 @@ import { ModelListTable } from './model-list/ModelListTable';
 import { PageContainer } from '../../common/components/PageContainer';
 import { ModelsNextUIToggleSwitch } from './ModelsNextUIToggleSwitch';
 import { withNextModelsUIContext } from '../hooks/useNextModelsUI';
+import { getPublishModels } from '../../common/actions';
 
 const NAME_COLUMN_INDEX = 'name';
 const LAST_MODIFIED_COLUMN_INDEX = 'last_updated_timestamp';
@@ -63,6 +64,7 @@ export class ModelListViewImpl extends React.Component<ModelListViewImplProps, M
 
     this.state = {
       maxResultsSelection: REGISTERED_MODELS_PER_PAGE_COMPACT,
+      publishedModels: []
     };
   }
 
@@ -87,6 +89,15 @@ export class ModelListViewImpl extends React.Component<ModelListViewImplProps, M
   componentDidMount() {
     const pageTitle = 'MLflow Models';
     Utils.updatePageTitle(pageTitle);
+    this.getPublishedVersions()
+  }
+
+  getPublishedVersions = () => {
+    getPublishModels().then((resp) => {
+      if (resp.status === 200) {
+        this.setState({ publishedModels: resp.data });
+      }
+    });
   }
 
   handleSearch = (event: any, searchInput: any) => {
@@ -197,6 +208,7 @@ export class ModelListViewImpl extends React.Component<ModelListViewImplProps, M
           orderByKey={this.props.orderByKey}
           orderByAsc={this.props.orderByAsc}
           isLoading={loading || false}
+          publishedModels={this.state["publishedModels"]}
           error={error}
           pagination={
             <div
